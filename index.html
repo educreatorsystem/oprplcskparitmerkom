@@ -1725,9 +1725,15 @@ Provide output in strict JSON format with keys "fokus", "improve", "share":
 
 
             // Images
-            document.getElementById('pv_img1').src = item.images.img1;
-            document.getElementById('pv_img2').src = item.images.img2;
-            document.getElementById('pv_img3').src = item.images.img3;
+            const evidencePlaceholders = [
+                'https://placehold.co/400x300/e2e8f0/475569?text=Gambar+Aktiviti+1',
+                'https://placehold.co/400x300/e2e8f0/475569?text=Gambar+Aktiviti+2',
+                'https://placehold.co/400x300/e2e8f0/475569?text=Gambar+Aktiviti+3'
+            ];
+            [1, 2, 3].forEach(number => {
+                const image = document.getElementById(`pv_img${number}`);
+                image.src = (item.images && item.images[`img${number}`]) || evidencePlaceholders[number - 1];
+            });
 
             displayReportTeachers(item);
             applyReportIdentity(item);
@@ -1738,25 +1744,62 @@ Provide output in strict JSON format with keys "fokus", "improve", "share":
             document.getElementById('a4PreviewModal').classList.add('hidden');
         }
 
+        function waitForPrintableImage(image, timeout = 15000) {
+            if (image.complete && image.naturalWidth > 0) return Promise.resolve();
+            return new Promise(resolve => {
+                let finished = false;
+                const done = () => {
+                    if (finished) return;
+                    finished = true;
+                    clearTimeout(timer);
+                    image.removeEventListener('load', done);
+                    image.removeEventListener('error', done);
+                    resolve();
+                };
+                const timer = setTimeout(done, timeout);
+                image.addEventListener('load', done, { once: true });
+                image.addEventListener('error', done, { once: true });
+                if (image.decode) image.decode().then(done).catch(() => {});
+            });
+        }
+
         async function printReport() {
             const source = document.querySelector('.print-content');
             if (!source || !activePreviewId) { showToast('Pilih laporan dahulu.', 'warning'); return; }
             const printWindow = window.open('', '_blank');
             if (!printWindow) { showToast('Benarkan popup untuk mencetak laporan.', 'warning'); return; }
+            const sourceImages = Array.from(source.querySelectorAll('img'));
+            await Promise.all(sourceImages.map(image => waitForPrintableImage(image)));
+
+            // Gunakan URL mutlak. Popup cetakan bermula pada about:blank, jadi URL relatif
+            // seperti logo sekolah tidak akan dipaparkan tanpa langkah ini.
+            const printableClone = source.cloneNode(true);
+            const clonedImages = Array.from(printableClone.querySelectorAll('img'));
+            clonedImages.forEach((image, index) => {
+                const original = sourceImages[index];
+                const originalSource = original && (original.currentSrc || original.getAttribute('src'));
+                if (originalSource) image.src = new URL(originalSource, document.baseURI).href;
+                image.loading = 'eager';
+                image.decoding = 'sync';
+                image.style.visibility = 'visible';
+                image.style.opacity = '1';
+            });
             // Capture generated utility CSS so printing does not depend on a second Tailwind load.
             const css = Array.from(document.querySelectorAll('style')).map(el=>el.textContent).join('\n');
-            printWindow.document.write(`<!DOCTYPE html><html lang="ms"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Laporan OPR PLC</title><style>${css}
+            printWindow.document.write(`<!DOCTYPE html><html lang="ms"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><base href="${document.baseURI}"><title>Laporan OPR PLC</title><style>${css}
                 *{box-sizing:border-box}body{margin:0;font-family:Arial,sans-serif;background:#fff}
                 .print-content{width:210mm;min-height:297mm;max-height:none;height:auto;padding:10mm 12mm;margin:auto;overflow:visible;box-shadow:none;border:0;border-radius:0}
                 .mb-4{margin-bottom:1rem}.text-center{text-align:center}.grid{display:grid}.grid-cols-2{grid-template-columns:repeat(2,minmax(0,1fr))}
-                img{max-width:100%;object-fit:contain}.grid>*{min-width:0}p{overflow-wrap:anywhere;white-space:pre-line}
+                img{max-width:100%;object-fit:contain;display:block!important;visibility:visible!important;opacity:1!important}.grid>*{min-width:0}p{overflow-wrap:anywhere;white-space:pre-line}
                 @media screen and (max-width:800px){body{overflow-x:auto}.print-content{margin:0}}
                 @page{size:A4 portrait;margin:0}
-                @media print{.no-print{display:none!important}.print-content{width:210mm!important;min-height:297mm!important;height:auto!important;max-height:none!important;overflow:visible!important;page-break-after:auto;page-break-inside:auto}img,tr{break-inside:avoid}body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
-                </style></head><body>${source.outerHTML}</body></html>`);
+                @media print{.no-print{display:none!important}.print-content{width:210mm!important;min-height:297mm!important;height:auto!important;max-height:none!important;overflow:visible!important;page-break-after:auto;page-break-inside:auto}img{display:block!important;visibility:visible!important;opacity:1!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}img,tr{break-inside:avoid}body{-webkit-print-color-adjust:exact;print-color-adjust:exact}}
+                </style></head><body>${printableClone.outerHTML}</body></html>`);
             printWindow.document.close();
-            await Promise.all(Array.from(printWindow.document.images).map(img=>img.complete ? Promise.resolve() : new Promise(resolve=>{img.onload=resolve;img.onerror=resolve;setTimeout(resolve,10000)})));
-            await printWindow.document.fonts.ready;
+            await Promise.all(Array.from(printWindow.document.images).map(image => waitForPrintableImage(image)));
+            if (printWindow.document.fonts && printWindow.document.fonts.ready) await printWindow.document.fonts.ready;
+            await new Promise(resolve => printWindow.requestAnimationFrame(() => printWindow.requestAnimationFrame(resolve)));
+            printWindow.focus();
             printWindow.print();
         }
         async function deleteOprRecord(id) {

@@ -21,6 +21,10 @@ Jangan ubah nama atau lokasi folder `assets` kerana header dan logo menggunakan 
 
 Moto sekolah pada header: **SKPM the best** dan **Melangkah dengan bergaya**.
 
+## Pembetulan paparan cetakan
+
+Versi 3 November 2026 membetulkan gambar yang tidak muncul dalam Print Preview. Sistem kini menukarkan semua laluan gambar kepada URL mutlak, menunggu logo dan gambar evidens selesai dimuatkan, serta memastikan gambar kekal kelihatan dalam gaya cetakan sebelum dialog cetak dibuka.
+
 Ujian pada 1 November 2026 mendapati kedua-dua CSV dan URL Apps Script boleh dicapai. Walau bagaimanapun, respons Apps Script masih memaparkan nama sistem lama **SMK Nipah**. Gantikan seluruh kod lama dengan fail `Code.gs` dalam pakej ini. Kemudian buka **Deploy → Manage deployments → Edit**, pilih **New version**, tetapkan **Execute as: Me** dan **Who has access: Anyone**, lalu klik **Deploy** sebelum menguji fungsi simpan dari GitHub Pages.
 
 ## Apps Script
